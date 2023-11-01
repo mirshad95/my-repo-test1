@@ -1,0 +1,39 @@
+stages:
+  - deploy
+
+variables:
+  # Available values for SERVICE
+  # dashboard
+  # landingpage
+  # service
+  # meet
+  SERVICE: "None"
+  ENV_MEET: "None" # if SERVICE is meet, then ENV_MEET shall be beta or prod
+
+deploy:
+  image: 991438683447.dkr.ecr.ap-southeast-1.amazonaws.com/dockerhub/alpine/k8s:1.17.5
+  stage: deploy
+  only:
+    refs:
+      - master
+    variables:
+      - $SERVICE != "None"
+  allow_failure: false
+  before_script:
+    - aws eks --region ap-southeast-1 update-kubeconfig --name sq_prod_eks --kubeconfig kubeconfig
+  script:
+    - |
+      echo "Environment variables: SERVICE - $SERVICE, ENV_MEET - $ENV_MEET"
+      if [ "$SERVICE" == "meet" ]; then
+        if [ "$ENV_MEET" == "beta" ]; then
+          helm --kubeconfig kubeconfig -n sq-meet-beta -f k8s/values/meet/meet-beta.yml upgrade meet k8s/meet
+        elif [ "$ENV_MEET" == "prod" ]; then
+          helm --kubeconfig kubeconfig -n sq-meet-prod -f k8s/values/meet/meet-prod.yml upgrade meet k8s/meet
+        else
+          echo "Wrong env for meet"
+          exit 1
+        fi
+      else
+        echo "Rolling out $SERVICE in production"
+        helm --kubeconfig kubeconfig -n sq-production -f k8s/values/app-prod.yml upgrade $SERVICE k8s/$SERVICE
+      fi
